@@ -19,7 +19,7 @@ print("Using device:", device)
 root_dir = os.path.abspath('../')
 sys.path.append(root_dir)
 
-parser = argparse.ArgumentParser("ZERO-TIG")
+parser = argparse.ArgumentParser("TempRetinex")
 parser.add_argument('--lowlight_images_path', type=str, default='./data',
                     help='location of the data corpus')
 parser.add_argument('--save', type=str,
@@ -30,9 +30,13 @@ parser.add_argument('--model_pretrain', type=str,
                     help='location of the data corpus')
 parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
 parser.add_argument('--seed', type=int, default=2, help='random seed')
-parser.add_argument('--raft_model', type=str, default='./weights/raft-sintel.pth', help='path to pre-trained raft model')
-parser.add_argument('--of_scale', type=int, default=3, help='downscale size when compute OF')
+parser.add_argument('--raft_model', type=str, default='./weights/raft-sintel-finetuned.pth', help='path to pre-trained raft model')
+parser.add_argument('--of_scale', type=int, default=1, help='downscale size when compute OF')
 parser.add_argument('--dataset', type=str, default='RLV', help='Specified data set')
+parser.add_argument('--gain', type=int, default=100, help='OF loss gain')
+parser.add_argument('--project', type=str, default='Inference')
+parser.add_argument('--stage', type=int, default=1)
+parser.add_argument('--w', type=float, default=0.01)
 
 args = parser.parse_args()
 save_path = args.save
@@ -85,7 +89,7 @@ def main():
                 print("Eval Get this img from: ", img_path, "\n Last img from: ", last_img_path)
 
             input = Variable(input).to(device)
-            enhance, output, illum = model(input)
+            enhance, output, illum, last_H3_wp = model(input)
 
             if 'RLV' == args.dataset:
                 input_name = img_name[0].split('/')[-1].split('.')[0]
@@ -99,8 +103,12 @@ def main():
             os.makedirs(save_dir, exist_ok=True)
             enhance = save_images(enhance)
             output = save_images(output)
+            last_H3_wp = save_images(last_H3_wp)
+            illum = save_images(illum)
             Image.fromarray(output).save(save_dir + '/' + input_name + '_denoise' + '.png', 'PNG')
             Image.fromarray(enhance).save(save_dir + '/' + input_name + '_enhance' + '.png', 'PNG')
+            Image.fromarray(last_H3_wp).save(save_dir + '/' + input_name + '_lastwp' + '.png', 'PNG')
+            Image.fromarray(illum).save(save_dir + '/' + input_name + '_illum' + '.png', 'PNG')
 
 
     torch.set_grad_enabled(True)

@@ -10,7 +10,7 @@ PI = 22.0 / 7.0
 
 
 class LossFunction(nn.Module):
-    def __init__(self, is_WB):
+    def __init__(self, args):
         super(LossFunction, self).__init__()
         self._l2_loss = nn.MSELoss()
         self._l1_loss = nn.L1Loss()
@@ -18,33 +18,26 @@ class LossFunction(nn.Module):
         self.texture_difference=TextureDifference()
         self.local_mean=LocalMean(patch_size=5)
         self.L_TV_loss=L_TV()
-        self.is_WB = is_WB
+        self.args = args
 
-    def forward(self,input,L_pred1,L_pred2,L2,s2,s21,s22,H2,H11,H12,H13,s13,H14,s14,H3,s3,H3_pred,H4_pred,L_pred1_L_pred2_diff,H3_denoised1_H3_denoised2_diff,H2_blur,H3_blur):
+    def forward(self,input,L_pred1,L_pred2,L2,s2,s21,s22,H2,H11,H12,H3,s3,H3_pred,H4_pred,H3_denoised1_H3_denoised2_diff,H2_blur,H3_blur,last_H3_wp):
         eps = 1e-9
         input = input + eps
-        if self.is_WB:
-            input_Y_mean = torch.mean(L2.detach(), dim=(2, 3))
-            enhancement_factor = 0.3 / (input_Y_mean + eps)
-            enhancement_factor = enhancement_factor.unsqueeze(2).unsqueeze(3)
-        else:
-            input_Y = L2.detach()[:, 2, :, :] * 0.299 + L2.detach()[:, 1, :, :] * 0.587 + L2.detach()[:, 0, :, :] * 0.144
-            input_Y_mean = torch.mean(input_Y, dim=(1, 2))
-            enhancement_factor = 0.5 / (input_Y_mean + eps)
-            enhancement_factor = enhancement_factor.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-            enhancement_factor = enhancement_factor.repeat(1, 3, 1, 1)
+
+        input_Y = L2.detach()[:, 2, :, :] * 0.299 + L2.detach()[:, 1, :, :] * 0.587 + L2.detach()[:, 0, :, :] * 0.144
+        input_Y_mean = torch.mean(input_Y, dim=(1, 2))
+        enhancement_factor = 0.3 / (input_Y_mean + eps)
+        enhancement_factor = enhancement_factor.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        enhancement_factor = enhancement_factor.repeat(1, 3, 1, 1)
         enhancement_factor = torch.clamp(enhancement_factor, 1, 25)
         adjustment_ratio = torch.pow(0.7, -enhancement_factor) / enhancement_factor
-        # adjustment_ratio = adjustment_ratio.repeat(1, 3, 1, 1)
-        normalized_low_light_layer  = L2.detach() / s2
-        normalized_low_light_layer = torch.clamp(normalized_low_light_layer, eps, 0.8)
         enhanced_brightness=torch.pow(L2.detach()*enhancement_factor, enhancement_factor)
         clamped_enhanced_brightness = torch.clamp(enhanced_brightness * adjustment_ratio, eps, 1)
         clamped_adjusted_low_light  = torch.clamp(L2.detach() *  enhancement_factor,eps,1)
         loss = 0
         #Enhance_loss
         loss += self._l2_loss(s2, clamped_enhanced_brightness) *700
-        loss += self._l2_loss(normalized_low_light_layer, clamped_adjusted_low_light) *1000
+        loss += self._l2_loss(H2, clamped_adjusted_low_light) *1000
         loss += self.smooth_loss(L2.detach(), s2) *5
         loss += self.L_TV_loss(s2)*1600
         #Loss_res_1
@@ -65,16 +58,27 @@ class LossFunction(nn.Module):
         #Loss_ill
         loss += self._l2_loss(s2.detach(), s3) * 1000
         #Loss_inter
+        # mask1, mask2 = pair_downsampler(mask)
         local_mean1 = self.local_mean(H3_denoised1)
         local_mean2 = self.local_mean(H3_denoised2)
         weighted_diff1 = (1 - H3_denoised1_H3_denoised2_diff) * local_mean1+H3_denoised1*H3_denoised1_H3_denoised2_diff
         weighted_diff2 = (1 - H3_denoised1_H3_denoised2_diff) * local_mean2+H3_denoised1*H3_denoised1_H3_denoised2_diff
-        loss += self._l2_loss(H3_denoised1,weighted_diff1)* 10000
-        loss += self._l2_loss(H3_denoised2, weighted_diff2)* 10000
+        loss += self._l2_loss(H3_denoised1, weighted_diff1) * 10000
+        loss += self._l2_loss(H3_denoised2, weighted_diff2) * 10000
         #Loss_Var
         noise_std = calculate_local_variance(H3 - H2)
         H2_var = calculate_local_variance(H2)
         loss += self._l2_loss(H2_var, noise_std) * 1000
+
+        # multiscale temporal loss
+        factors = [1, 2, 4, 8]
+        B, C, H, W = H3.shape
+        for f in factors:
+            diff = F.interpolate((last_H3_wp - H2), size=(H // f, W // f), mode='bilinear', align_corners=False)
+            mask = torch.exp(- diff ** 2 / self.args.w).detach()
+            resize_last_H3 = F.interpolate(last_H3_wp, size=(H // f, W // f), mode='bilinear', align_corners=False)
+            resize_H3 = F.interpolate(H3, size=(H // f, W // f), mode='bilinear', align_corners=False)
+            loss += self._l1_loss(resize_last_H3 * mask, resize_H3 * mask) / len(factors) * self.args.gain
         return loss
 
 def local_mean(self, image):

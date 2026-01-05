@@ -25,7 +25,7 @@ print("Using device:", device)
 root_dir = os.path.abspath('../')
 sys.path.append(root_dir)
 
-parser = argparse.ArgumentParser("ZERO-IG")
+parser = argparse.ArgumentParser("TempRetinex")
 parser.add_argument('--lowlight_images_path', type=str, default='./data',
                     help='location of the data corpus')
 parser.add_argument('--save', type=str,
@@ -36,9 +36,14 @@ parser.add_argument('--model_pretrain', type=str,
                     help='location of the data corpus')
 parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
 parser.add_argument('--seed', type=int, default=2, help='random seed')
-parser.add_argument('--raft_model', type=str, default='./weights/raft-sintel.pth', help='path to pre-trained raft model')
+parser.add_argument('--raft_model', type=str, default='./weights/raft-sintel-finetuned.pth', help='path to pre-trained raft model')
 parser.add_argument('--of_scale', type=int, default=3, help='downscale size when compute OF')
 parser.add_argument('--dataset', type=str, default='RLV', help='Specified data set')
+parser.add_argument('--gain', type=int, default=100, help='OF loss gain')
+parser.add_argument('--project', type=str, default='Test')
+parser.add_argument('--stage', type=int, default=1)
+parser.add_argument('--w', type=float, default=0.01)
+
 
 args = parser.parse_args()
 save_path = args.save
@@ -131,14 +136,14 @@ def main():
 
             input = Variable(input).to(device)
             input_name = img_name[0].split('/')[-1].split('.')[0]
-            gt_path = img_path[0].replace('input', 'GT')
+            gt_path = img_path[0].replace('input', 'gt').replace('low_light_', 'normal_light_')
             splits = img_path[0].split(os.sep)
-            data_source = splits[-2]
+            data_source = splits[-3] +'/'+splits[-2]
 
             gt_img = np.asarray(Image.open(gt_path, mode='r'), dtype=np.float32) / 255.
 
             # inference start from here
-            enhance, output, illum = model(input)
+            enhance, output, illum, last_H3_wp = model(input)
             # last_H3 = save_images(model.last_H3)
             # Image.fromarray(last_H3).save('./' + input_name + '_denoise_last' + '.png', 'PNG')
             model.update_H3(output, illum)
@@ -167,7 +172,7 @@ def main():
 
 
             # save
-            if is_save_img:
+            if is_save_img and i < 20:
                 save_dir = os.path.join(args.save, data_source)
                 os.makedirs(save_dir, exist_ok=True)
                 input_name = '%s' % (input_name)
