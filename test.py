@@ -9,7 +9,7 @@ from PIL import Image
 from torch.autograd import Variable
 from model.model import Finetunemodel, Network
 from dataloader.create_data import CreateDataset
-# from thop import profile
+from thop import profile
 import cv2
 from skimage.metrics import structural_similarity as ssim
 import lpips
@@ -108,6 +108,17 @@ def histogram_match(out: np.ndarray, gt: np.ndarray):
     # matched_out = np.round(matched_out * 255).astype(np.uint8)
     return matched_out
 
+
+def calculate_model_flops(model, input_size=(1, 3, 400, 600)):
+    """
+    Calculate model FLOPs using thop
+    input_size: (B, C, H, W)
+    """
+    model.eval()
+    dummy_input = torch.randn(input_size).to(device)
+    flops, params = profile(model, inputs=(dummy_input,), verbose=False)
+    return flops, params
+
 def main():
     # metric
     total_psnr = 0
@@ -124,10 +135,15 @@ def main():
     model = model.to(device)
     model.eval()
     # Calculate model size
-    total_params = calculate_model_parameters(model)
-    print("Total number of parameters: ", total_params)
+    # total_params = calculate_model_parameters(model)
+    # print("Total number of parameters: ", total_params)
     for p in model.parameters():
         p.requires_grad = False
+
+    # flops, params = calculate_model_flops(model, input_size=(1, 3, 400, 600))
+    #
+    # print("Model Params: {:.3f} M".format(params / 1e6))
+    # print("Model FLOPs: {:.3f} GFLOPs".format(flops / 1e9))
     with torch.no_grad():
         for i, (input, img_name, img_path, last_img_path) in enumerate(test_queue):
             model.is_new_seq = sequential_judgment(img_path[0], last_img_path[0])
