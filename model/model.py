@@ -230,6 +230,14 @@ class Network(nn.Module):
         H12 = L12 / s22
         H12 = torch.clamp(H12, eps, 1)
 
+        if self.is_new_seq:
+            self.last_H3_wp = H2.detach()
+            self.last_H31_wp = H11.detach()
+            self.last_H32_wp = H12.detach()
+            self.last_s3_wp = s2.detach()
+            self.last_s31_wp = s21.detach()
+            self.last_s32_wp = s22.detach()
+
         H3_pred = torch.cat([H11, s21], 1).detach() - self.denoise_2(torch.cat([self.last_H31_wp, self.last_s31_wp, H11, s21], 1))
         H3_pred = torch.clamp(H3_pred, eps, 1)
         H13 = H3_pred[:, :3, :, :]
@@ -388,9 +396,9 @@ class Finetunemodel(nn.Module):
         # H2 = input / s2
         # H2 = torch.clamp(H2, eps, 1)
 
-        # if self.is_new_seq:
-        #     self.last_H3_wp = H2.detach()
-        #     self.last_s3_wp = s2.detach()
+        if self.is_new_seq:
+            self.last_H3_wp = H2.detach()
+            self.last_s3_wp = s2.detach()
 
         H5_pred = torch.cat([H2, s2], 1).detach() - self.denoise_2(
             torch.cat([self.last_H3_wp, self.last_s3_wp, H2, s2], 1))

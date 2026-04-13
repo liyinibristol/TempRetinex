@@ -18,6 +18,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def extract_number(self, filename):
         match = os.path.splitext(os.path.split(filename)[1])[0]
+        match = match.split('.')[-1]
         return int(match) if match else 0  # Extract the numeric part and convert it to an integer
 
     def sort_files_by_name(self, img_list):
@@ -54,8 +55,8 @@ class DefaultDataset(BaseDataset):
 
     def load_images_transform(self, file):
         im = Image.open(file).convert('RGB')
-        new_size = (1920, 1080)
-        im = im.resize(new_size)
+        # new_size = (1920, 1080)
+        # im = im.resize(new_size)
         img_norm = self.transform(im)
         return img_norm
 
@@ -205,3 +206,61 @@ class DidDataloader(BaseDataset):
 
     def name(self):
         return 'DID'
+
+
+class EspritDataloader(BaseDataset):
+    def initialize(self, args, task):
+        self.args = args
+        self.low_img_dir = args.lowlight_images_path
+        self.task = task
+        self.train_low_data_names = []
+        self.train_target_data_names = []
+        assert os.path.exists(self.low_img_dir), "Input directory does not exist!"
+
+        self.train_low_data_names = self.load_dataset(self.low_img_dir, task)
+
+        self.count = len(self.train_low_data_names)
+        transform_list = []
+        transform_list += [transforms.ToTensor()]
+        self.transform = transforms.Compose(transform_list)
+        self.last_data_name_path = self.train_low_data_names[0]
+
+    def load_dataset(self, dir, task):
+        img_list = []
+        phase_list_file = f"{task}_list.txt"
+        phase_list_path = os.path.join(os.path.dirname(dir), "Offset", phase_list_file)
+        if os.path.exists(phase_list_path):
+            with open(phase_list_path, 'r') as file:
+                phase_list = file.readlines()
+                assert len(phase_list) > 0, "No input data."
+        else:
+            phase_list = glob.glob(os.path.join(dir, '*'))
+            phase_list = [os.path.basename(p) for p in phase_list]
+
+        for img_path in phase_list:
+            img_path = img_path.strip().split(",")[0]
+            img_list.append(img_path)
+
+        return img_list
+
+    def load_images_transform(self, file):
+        im = Image.open(file).convert('RGB')
+        # new_size = (1920, 1080)
+        # im = im.resize(new_size)
+        img_norm = self.transform(im)
+        return img_norm
+
+    def __getitem__(self, index):
+        ll = self.load_images_transform(self.train_low_data_names[index])
+        img_name = os.path.splitext(os.path.basename(self.train_low_data_names[index]))[0]
+        img_path = self.train_low_data_names[index]
+        last_data_name_path = self.last_data_name_path
+        self.last_data_name_path = img_path
+
+        return ll, img_name, img_path, last_data_name_path
+
+    def __len__(self):
+        return self.count
+
+    def name(self):
+        return 'Esprit'

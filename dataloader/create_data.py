@@ -8,6 +8,8 @@ def CreateDataset(args, task):
         dataset = RLVDataLoader()
     elif 'DID' == args.dataset:
         dataset = DidDataloader()
+    elif 'Esprit' == args.dataset:
+        dataset = EspritDataloader()
     else:
         dataset = DefaultDataset()
 

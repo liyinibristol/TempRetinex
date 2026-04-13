@@ -149,8 +149,8 @@ def sequential_judgment(img_path, last_img_path):
     assert os.path.exists(last_img_path)
     img_dir, img_name = os.path.split(img_path)
     last_img_dir, last_img_name = os.path.split(last_img_path)
-    img_idx = int(os.path.splitext(img_name)[0])
-    last_img_idx = int(os.path.splitext(last_img_name)[0])
+    img_idx = int(os.path.splitext(img_name)[0].split('.')[-1])
+    last_img_idx = int(os.path.splitext(last_img_name)[0].split('.')[-1])
 
     if img_dir != last_img_dir:
         is_new_seq = True

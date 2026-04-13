@@ -28,7 +28,7 @@ parser.add_argument('--dataset', type=str, default='RLV', help='Specified data s
 parser.add_argument('--gain', type=int, default=100, help='OF loss gain')
 parser.add_argument('--resume', type=bool, default=False)
 parser.add_argument('--project', type=str, default='Train')
-parser.add_argument('--stage', type=int, default=1)
+# parser.add_argument('--stage', type=int, default=1)
 parser.add_argument('--w', type=float, default=0.01)
 
 args = parser.parse_args()
@@ -166,7 +166,7 @@ def main():
                     input = Variable(input, volatile=True).cuda()
                     L_pred1,L_pred2,L2,s2,s21,s22,H2,H11,H12,H13,s13,H14,s14,H3,s3,H3_pred,H4_pred,L_pred1_L_pred2_diff,H13_H14_diff,H2_blur,H3_blur,H3_denoised1,H3_denoised2= model(input)
                     last_H3_wp = model.last_H3_wp
-                    mask = torch.exp(-(last_H3_wp - H2) ** 2 / model.args.w)
+                    mask = torch.exp(-(last_H3_wp - H2) ** 2 / args.w)
         
                     input_name = '%s_%s' % (os.path.basename(os.path.split(img_path[0])[0]), img_name[0])
                     H3_img = save_images(H3)
